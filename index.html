@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X Post Previewer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f8fa;
+            color: #14171a;
+        }
+        .container {
+            background-color: white;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        .device-toggle {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+        .device-btn {
+            padding: 8px 16px;
+            border: 1px solid #cfd9de;
+            background-color: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        .device-btn.active {
+            background-color: #1d9bf0;
+            color: white;
+            border-color: #1d9bf0;
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #1d9bf0;
+        }
+        .input-area {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 120px;
+            padding: 12px;
+            border: 1px solid #cfd9de;
+            border-radius: 4px;
+            resize: none;
+            font-size: 16px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .character-count {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 14px;
+            color: #536471;
+        }
+        .character-count.limit {
+            color: #f4212e;
+        }
+        .preview-area {
+            margin-top: 20px;
+            border: 1px solid #cfd9de;
+            border-radius: 16px;
+            padding: 16px;
+            background-color: white;
+            transition: all 0.3s ease;
+        }
+        .preview-area.mobile {
+            max-width: 320px;
+            margin-left: auto;
+            margin-right: auto;
+            border-radius: 10px;
+        }
+        .preview-area.desktop {
+            max-width: 100%;
+        }
+        .post-content {
+            font-size: 16px;
+            line-height: 1.5;
+            margin-bottom: 10px;
+            word-wrap: break-word;
+        }
+        .preview-area.mobile .post-content {
+            font-size: 15px;
+        }
+        .truncated {
+            overflow: hidden;
+            position: relative;
+        }
+        .desktop .truncated {
+            max-height: 315px;
+        }
+        .mobile .truncated {
+            max-height: 260px;
+        }
+        /* Removed gradient fade */
+        .show-more {
+            color: #1d9bf0;
+            font-size: 15px;
+            cursor: pointer;
+            margin-top: 8px;
+            display: inline-block;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .fits {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+        .exceeds {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .info {
+            font-size: 14px;
+            color: #536471;
+            margin-top: 20px;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>X Post Previewer</h1>
+        
+        <div class="device-toggle">
+            <button id="mobile-btn" class="device-btn">Mobile</button>
+            <button id="desktop-btn" class="device-btn active">Desktop</button>
+        </div>
+        
+        <div class="input-area">
+            <textarea id="post-input" placeholder="Type your post here..."></textarea>
+            <div id="char-count" class="character-count">0/280</div>
+        </div>
+        
+        <div class="preview-area desktop">
+            <div id="post-preview" class="post-content"></div>
+            <div id="show-more" class="show-more" style="display: none;">Show more</div>
+            <div class="toggle-container" style="margin-top: 15px; text-align: center;">
+                <label for="exact-preview" style="font-size: 14px; color: #536471; display: flex; align-items: center; justify-content: center;">
+                    <input type="checkbox" id="exact-preview" style="margin-right: 8px;">
+                    Show exact cutoff point (what viewers will see)
+                </label>
+            </div>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div class="info">
+            <p>X has a 280 character limit for standard posts. This tool shows you how your post will look and whether it will need the "Show more" expansion.</p>
+            <p>The "Show more" button appears at different heights based on device:</p>
+            <ul style="margin-top: 5px; color: #536471; font-size: 14px;">
+                <li>Desktop: Approximately 8-10 lines (315px in height)</li>
+                <li>Mobile: Approximately 6-8 lines (260px in height)</li>
+            </ul>
+            <p style="margin-top: 10px;">Toggle between views to ensure your post displays optimally on all devices.</p>
+        </div>
+    </div>
+
+    <script>
+        const postInput = document.getElementById('post-input');
+        const charCount = document.getElementById('char-count');
+        const postPreview = document.getElementById('post-preview');
+        const showMoreBtn = document.getElementById('show-more');
+        const statusDiv = document.getElementById('status');
+        const mobileBtn = document.getElementById('mobile-btn');
+        const desktopBtn = document.getElementById('desktop-btn');
+        const previewArea = document.querySelector('.preview-area');
+        
+        // Device-specific configurations
+        const deviceConfig = {
+            desktop: {
+                maxHeight: 315,  // Approximate height before "Show more" appears on desktop
+                fontSize: 16
+            },
+            mobile: {
+                maxHeight: 260,  // Smaller height for mobile
+                fontSize: 15
+            }
+        };
+        
+        let currentDevice = 'desktop';
+        
+        // Toggle between mobile and desktop views
+        mobileBtn.addEventListener('click', () => {
+            setDeviceView('mobile');
+        });
+        
+        desktopBtn.addEventListener('click', () => {
+            setDeviceView('desktop');
+        });
+        
+        function setDeviceView(device) {
+            currentDevice = device;
+            
+            // Update UI
+            if (device === 'mobile') {
+                previewArea.classList.remove('desktop');
+                previewArea.classList.add('mobile');
+                mobileBtn.classList.add('active');
+                desktopBtn.classList.remove('active');
+            } else {
+                previewArea.classList.remove('mobile');
+                previewArea.classList.add('desktop');
+                desktopBtn.classList.add('active');
+                mobileBtn.classList.remove('active');
+            }
+            
+            // Re-evaluate the preview with the new device settings
+            updatePreview();
+        }
+        
+        postInput.addEventListener('input', updatePreview);
+        
+        const exactPreviewCheckbox = document.getElementById('exact-preview');
+        
+        exactPreviewCheckbox.addEventListener('change', function() {
+            updatePreview();
+        });
+        
+        function updatePreview() {
+            const text = postInput.value;
+            const count = text.length;
+            const exactPreview = exactPreviewCheckbox.checked;
+            
+            // Update character count
+            charCount.textContent = `${count}/280`;
+            charCount.className = count > 280 ? 'character-count limit' : 'character-count';
+            
+            // Update preview content with line breaks
+            postPreview.innerHTML = formatText(text);
+            
+            // Get the current device configuration
+            const config = deviceConfig[currentDevice];
+            
+            // Check if preview content requires "Show more"
+            const exceedsHeight = postPreview.scrollHeight > config.maxHeight;
+            
+            if (exceedsHeight) {
+                postPreview.classList.add('truncated');
+                
+                if (exactPreview) {
+                    // Determine approximately where the text would be cut off
+                    const fullText = postPreview.innerHTML;
+                    const approximateCharactersVisible = Math.floor((config.maxHeight / postPreview.scrollHeight) * fullText.length);
+                    
+                    // Create a temporary element to measure the height
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.position = 'absolute';
+                    tempDiv.style.visibility = 'hidden';
+                    tempDiv.style.width = postPreview.offsetWidth + 'px';
+                    tempDiv.style.fontSize = config.fontSize + 'px';
+                    tempDiv.style.lineHeight = '1.5';
+                    document.body.appendChild(tempDiv);
+                    
+                    // Find the correct cut-off point through binary search
+                    let start = 0;
+                    let end = fullText.length;
+                    let mid = Math.floor((start + end) / 2);
+                    let bestCutoff = mid;
+                    
+                    // Binary search to find closest height match without exceeding
+                    for (let i = 0; i < 10; i++) { // Limit iterations for performance
+                        tempDiv.innerHTML = fullText.substring(0, mid);
+                        if (tempDiv.offsetHeight <= config.maxHeight) {
+                            start = mid;
+                            bestCutoff = mid;
+                        } else {
+                            end = mid;
+                        }
+                        mid = Math.floor((start + end) / 2);
+                    }
+                    
+                    // Clean up
+                    document.body.removeChild(tempDiv);
+                    
+                    // Apply the truncated text with a hard cutoff
+                    postPreview.innerHTML = fullText.substring(0, bestCutoff);
+                    
+                    // Show a hard cutoff indicator
+                    postPreview.classList.add('with-hard-cutoff');
+                    
+                    // Add a hidden content indicator
+                    const hiddenIndicator = document.createElement('div');
+                    hiddenIndicator.className = 'hidden-content-indicator';
+                    hiddenIndicator.innerText = 'Hidden content (only visible after clicking "Show more")';
+                    postPreview.parentNode.insertBefore(hiddenIndicator, showMoreBtn);
+                } else {
+                    // Regular mode - just add the truncated class but show full text
+                    postPreview.classList.remove('with-hard-cutoff');
+                    
+                    // Remove hidden content indicator if it exists
+                    const hiddenIndicator = document.querySelector('.hidden-content-indicator');
+                    if (hiddenIndicator) {
+                        hiddenIndicator.remove();
+                    }
+                }
+                
+                showMoreBtn.style.display = 'inline-block';
+                statusDiv.textContent = `This post will show the "Show more" button on ${currentDevice}.`;
+                statusDiv.className = 'status exceeds';
+                statusDiv.style.display = 'block';
+            } else {
+                postPreview.classList.remove('truncated');
+                postPreview.classList.remove('with-hard-cutoff');
+                
+                // Remove hidden content indicator if it exists
+                const hiddenIndicator = document.querySelector('.hidden-content-indicator');
+                if (hiddenIndicator) {
+                    hiddenIndicator.remove();
+                }
+                showMoreBtn.style.display = 'none';
+                
+                if (text.trim().length > 0) {
+                    statusDiv.textContent = `This post will display fully without needing expansion on ${currentDevice}.`;
+                    statusDiv.className = 'status fits';
+                    statusDiv.style.display = 'block';
+                } else {
+                    statusDiv.style.display = 'none';
+                }
+            }
+        }
+        
+        function formatText(text) {
+            // Replace URLs with clickable links
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            text = text.replace(urlRegex, '<span style="color: #1d9bf0;">$1</span>');
+            
+            // Replace hashtags
+            const hashtagRegex = /#(\w+)/g;
+            text = text.replace(hashtagRegex, '<span style="color: #1d9bf0;">#$1</span>');
+            
+            // Replace mentions
+            const mentionRegex = /@(\w+)/g;
+            text = text.replace(mentionRegex, '<span style="color: #1d9bf0;">@$1</span>');
+            
+            // Replace line breaks with <br>
+            return text.replace(/\n/g, '<br>');
+        }
+        
+        showMoreBtn.addEventListener('click', function() {
+            if (exactPreviewCheckbox.checked) {
+                // In exact preview mode, clicking "Show more" should show the full text
+                exactPreviewCheckbox.checked = false;
+                
+                // Remove hidden content indicator if it exists
+                const hiddenIndicator = document.querySelector('.hidden-content-indicator');
+                if (hiddenIndicator) {
+                    hiddenIndicator.remove();
+                }
+                
+                updatePreview();
+                postPreview.classList.remove('truncated');
+                this.textContent = 'Show less';
+            } else {
+                // Regular toggle behavior
+                postPreview.classList.toggle('truncated');
+                this.textContent = postPreview.classList.contains('truncated') ? 'Show more' : 'Show less';
+            }
+        });
+        
+        // Add styles for hard cutoff
+        const style = document.createElement('style');
+        style.textContent = `
+            .with-hard-cutoff {
+                position: relative;
+                border-bottom: 1px dashed #cfd9de;
+                padding-bottom: 4px;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        // Initialize
+        updatePreview();
+    </script>
+</body>
+</html>
